@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facial Demographic Analysis | AI-Powered</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🧠 Facial Demographic Analysis</h1>
+            <p class="subtitle">AI-Powered Age, Gender & Ethnicity Prediction</p>
+            <p class="author">Developed by Muhammad Taimoor Haider | Deep Learning Project</p>
+        </header>
+
+        <!-- Mode Selector -->
+        <div class="mode-selector">
+            <button class="mode-btn active" onclick="switchMode('upload')" id="uploadModeBtn">
+                📁 Upload Image
+            </button>
+            <button class="mode-btn" onclick="switchMode('camera')" id="cameraModeBtn">
+                📷 Use Camera
+            </button>
+        </div>
+
+        <!-- Upload Mode -->
+        <div id="uploadMode" class="mode-content active">
+            <div class="upload-section">
+                <div class="upload-box" id="uploadBox">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Click to upload or drag and drop</p>
+                    <p class="upload-hint">Supports: JPG, PNG (Max 16MB)</p>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                </div>
+            </div>
+
+            <div id="uploadPreview" class="preview-section" style="display: none;">
+                <img id="previewImage" src="" alt="Preview">
+                <button class="btn-secondary" onclick="resetUpload()">Upload Another</button>
+            </div>
+
+            <div id="uploadResults" class="results-section" style="display: none;">
+                <!-- Results will be inserted here -->
+            </div>
+
+            <div id="uploadLoading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Analyzing image...</p>
+            </div>
+        </div>
+
+        <!-- Camera Mode -->
+        <div id="cameraMode" class="mode-content">
+            <div class="camera-section">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                
+                <div class="camera-controls">
+                    <button class="btn-primary" onclick="startCamera()" id="startCameraBtn">
+                        Start Camera
+                    </button>
+                    <button class="btn-primary" onclick="captureFrame()" id="captureBtn" style="display: none;">
+                        Capture & Analyze
+                    </button>
+                    <button class="btn-secondary" onclick="stopCamera()" id="stopCameraBtn" style="display: none;">
+                        Stop Camera
+                    </button>
+                </div>
+
+                <div id="cameraResults" class="results-section" style="display: none;">
+                    <!-- Camera results will be inserted here -->
+                </div>
+
+                <div id="cameraLoading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Analyzing frame...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Message -->
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Multi-Task CNN Model | TensorFlow | OpenCV | 23,705 Training Images</p>
+            <p>Model Performance: 90.7% Gender Accuracy | 5.79 Years Age MAE | 80.8% Ethnicity Accuracy</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+</body>
+</html>
