@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 1 --threads 2 --log-level debug",
+    "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --threads 1 --worker-class sync --max-requests 100 --max-requests-jitter 10 --log-level info --preload",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

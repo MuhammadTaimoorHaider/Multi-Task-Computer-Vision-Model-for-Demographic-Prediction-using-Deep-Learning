@@ -5,14 +5,20 @@ Author: Muhammad Taimoor Haider
 """
 
 from flask import Flask, render_template, request, jsonify
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Reduce TensorFlow logging
+
 import tensorflow as tf
 import cv2
 import numpy as np
-import os
 import base64
 from io import BytesIO
 from PIL import Image
 import sys
+import gc
+
+# Force CPU and optimize memory
+tf.config.set_visible_devices([], 'GPU')
 
 app = Flask(__name__)
 
@@ -26,31 +32,48 @@ IMAGE_SIZE = (128, 128)
 gender_map = {0: 'Male', 1: 'Female'}
 ethnicity_map = {0: 'White', 1: 'Black', 2: 'Asian', 3: 'Indian', 4: 'Others'}
 
-# Global model variable (lazy loading)
+# Global model variable
 model = None
+model_loading_error = None
 
-def load_model():
-    """Load model only when needed (lazy loading)"""
-    global model
-    if model is None:
-        try:
-            print("Loading model...", file=sys.stderr)
-            model_path = 'best_model.h5'
-            
-            if not os.path.exists(model_path):
-                print(f"ERROR: Model file not found at {model_path}", file=sys.stderr)
-                print(f"Current directory: {os.getcwd()}", file=sys.stderr)
-                print(f"Files in directory: {os.listdir('.')}", file=sys.stderr)
-                return None
-            
-            model = tf.keras.models.load_model(model_path, compile=False)
-            print("Model loaded successfully!", file=sys.stderr)
-        except Exception as e:
-            print(f"ERROR loading model: {str(e)}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
-            return None
-    return model
+def load_model_at_startup():
+    """Load model at startup with memory optimization"""
+    global model, model_loading_error
+    try:
+        print("=" * 60, file=sys.stderr)
+        print("STARTING MODEL LOAD", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        
+        model_path = 'best_model.h5'
+        
+        if not os.path.exists(model_path):
+            error_msg = f"Model file not found: {model_path}"
+            print(f"ERROR: {error_msg}", file=sys.stderr)
+            print(f"Files in current directory: {os.listdir('.')}", file=sys.stderr)
+            model_loading_error = error_msg
+            return
+        
+        file_size = os.path.getsize(model_path) / (1024 * 1024)
+        print(f"Model file size: {file_size:.2f} MB", file=sys.stderr)
+        
+        # Load with minimal memory footprint
+        print("Loading model (this may take 60-90 seconds)...", file=sys.stderr)
+        model = tf.keras.models.load_model(model_path, compile=False)
+        
+        # Clear memory
+        gc.collect()
+        
+        print("✓ Model loaded successfully!", file=sys.stderr)
+        print(f"Model inputs: {model.input_shape}", file=sys.stderr)
+        print(f"Model outputs: {len(model.outputs)} outputs", file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        
+    except Exception as e:
+        error_msg = f"Failed to load model: {str(e)}"
+        print(f"ERROR: {error_msg}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        model_loading_error = error_msg
 
 # Load face detector
 try:
@@ -79,11 +102,15 @@ def preprocess_image(img_array):
 
 def detect_and_predict(image_array):
     """Detect faces and make predictions"""
+    global model, model_loading_error
+    
     try:
-        # Load model if not already loaded
-        current_model = load_model()
-        if current_model is None:
-            return None, "Model not available. Please try again later."
+        # Check if model is loaded
+        if model is None:
+            if model_loading_error:
+                return None, f"Model loading failed: {model_loading_error}"
+            else:
+                return None, "Model is still loading. Please wait 30 seconds and try again."
         
         # Convert to grayscale for face detection
         gray = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)
@@ -110,7 +137,7 @@ def detect_and_predict(image_array):
             
             if preprocessed is not None:
                 # Make predictions
-                predictions = current_model.predict(preprocessed, verbose=0)
+                predictions = model.predict(preprocessed, verbose=0)
                 
                 # Extract predictions
                 age = int(round(predictions[0][0][0]))
@@ -215,21 +242,23 @@ def predict_camera():
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    try:
-        current_model = load_model()
-        return jsonify({
-            'status': 'healthy', 
-            'model_loaded': current_model is not None,
-            'tensorflow_version': tf.__version__
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'error': str(e)
-        }), 500
+    global model, model_loading_error
+    
+    return jsonify({
+        'status': 'healthy' if model is not None else 'loading',
+        'model_loaded': model is not None,
+        'model_error': model_loading_error,
+        'tensorflow_version': tf.__version__
+    })
 
 
 if __name__ == '__main__':
+    # Load model at startup
+    load_model_at_startup()
+    
     port = int(os.environ.get('PORT', 5000))
-    print(f"Starting app on port {port}...", file=sys.stderr)
+    print(f"Starting Flask app on port {port}...", file=sys.stderr)
     app.run(host='0.0.0.0', port=port, debug=False)
+else:
+    # When run with gunicorn --preload, load model once
+    load_model_at_startup()
