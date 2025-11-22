@@ -12,6 +12,7 @@ import os
 import base64
 from io import BytesIO
 from PIL import Image
+import sys
 
 app = Flask(__name__)
 
@@ -25,14 +26,40 @@ IMAGE_SIZE = (128, 128)
 gender_map = {0: 'Male', 1: 'Female'}
 ethnicity_map = {0: 'White', 1: 'Black', 2: 'Asian', 3: 'Indian', 4: 'Others'}
 
-# Load model
-print("Loading model...")
-model = tf.keras.models.load_model('best_model.h5')
-print("Model loaded successfully!")
+# Global model variable (lazy loading)
+model = None
+
+def load_model():
+    """Load model only when needed (lazy loading)"""
+    global model
+    if model is None:
+        try:
+            print("Loading model...", file=sys.stderr)
+            model_path = 'best_model.h5'
+            
+            if not os.path.exists(model_path):
+                print(f"ERROR: Model file not found at {model_path}", file=sys.stderr)
+                print(f"Current directory: {os.getcwd()}", file=sys.stderr)
+                print(f"Files in directory: {os.listdir('.')}", file=sys.stderr)
+                return None
+            
+            model = tf.keras.models.load_model(model_path, compile=False)
+            print("Model loaded successfully!", file=sys.stderr)
+        except Exception as e:
+            print(f"ERROR loading model: {str(e)}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            return None
+    return model
 
 # Load face detector
-face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-face_cascade = cv2.CascadeClassifier(face_cascade_path)
+try:
+    face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    face_cascade = cv2.CascadeClassifier(face_cascade_path)
+    if face_cascade.empty():
+        print("WARNING: Face cascade failed to load", file=sys.stderr)
+except Exception as e:
+    print(f"ERROR loading face cascade: {e}", file=sys.stderr)
 
 
 def preprocess_image(img_array):
@@ -53,6 +80,11 @@ def preprocess_image(img_array):
 def detect_and_predict(image_array):
     """Detect faces and make predictions"""
     try:
+        # Load model if not already loaded
+        current_model = load_model()
+        if current_model is None:
+            return None, "Model not available. Please try again later."
+        
         # Convert to grayscale for face detection
         gray = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)
         
@@ -78,7 +110,7 @@ def detect_and_predict(image_array):
             
             if preprocessed is not None:
                 # Make predictions
-                predictions = model.predict(preprocessed, verbose=0)
+                predictions = current_model.predict(preprocessed, verbose=0)
                 
                 # Extract predictions
                 age = int(round(predictions[0][0][0]))
@@ -183,9 +215,21 @@ def predict_camera():
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'model_loaded': model is not None})
+    try:
+        current_model = load_model()
+        return jsonify({
+            'status': 'healthy', 
+            'model_loaded': current_model is not None,
+            'tensorflow_version': tf.__version__
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    print(f"Starting app on port {port}...", file=sys.stderr)
     app.run(host='0.0.0.0', port=port, debug=False)
