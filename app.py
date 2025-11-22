@@ -46,15 +46,46 @@ def load_model_at_startup():
         
         model_path = 'best_model.h5'
         
+        # Check if model exists
         if not os.path.exists(model_path):
+            print(f"Model file not found locally. Checking for LFS pointer...", file=sys.stderr)
+            
+            # Try to get file size
+            try:
+                file_size = os.path.getsize(model_path)
+                print(f"File exists but size is: {file_size} bytes", file=sys.stderr)
+                
+                # If file is very small, it's probably an LFS pointer
+                if file_size < 1000:
+                    print("File is an LFS pointer! Railway didn't download it.", file=sys.stderr)
+                    print("Reading pointer file...", file=sys.stderr)
+                    with open(model_path, 'r') as f:
+                        content = f.read()
+                        print(f"Pointer content: {content[:200]}", file=sys.stderr)
+                    
+                    error_msg = "Model file is a Git LFS pointer. Railway free tier doesn't support LFS. Please upgrade Railway or use Hugging Face Spaces."
+                    print(f"ERROR: {error_msg}", file=sys.stderr)
+                    model_loading_error = error_msg
+                    return
+            except:
+                pass
+            
             error_msg = f"Model file not found: {model_path}"
             print(f"ERROR: {error_msg}", file=sys.stderr)
-            print(f"Files in current directory: {os.listdir('.')}", file=sys.stderr)
+            print(f"Current directory: {os.getcwd()}", file=sys.stderr)
+            print(f"Files in directory: {os.listdir('.')}", file=sys.stderr)
             model_loading_error = error_msg
             return
         
         file_size = os.path.getsize(model_path) / (1024 * 1024)
         print(f"Model file size: {file_size:.2f} MB", file=sys.stderr)
+        
+        # If file is too small, it's an LFS pointer
+        if file_size < 10:
+            error_msg = f"Model file is only {file_size:.2f} MB - this is a Git LFS pointer, not the actual model. Railway free tier doesn't support Git LFS."
+            print(f"ERROR: {error_msg}", file=sys.stderr)
+            model_loading_error = error_msg
+            return
         
         # Load with minimal memory footprint
         print("Loading model (this may take 60-90 seconds)...", file=sys.stderr)
